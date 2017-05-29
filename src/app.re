@@ -1,34 +1,33 @@
+type event = {id: string, title: string, description: string, time: float};
+
+module Decode = {
+  let root json => Js.Json.decodeArray json;
+  let event json :event =>
+    Json.Decode.{
+      id: json |> field "id" string,
+      title: json |> field "name" string,
+      description: json |> field "description" string,
+      time: json |> field "time" float
+    };
+  let main json => [|event json|];
+};
+
 module App = {
   include ReactRe.Component.Stateful;
   type props = {title: string};
-  type event = {id: string, title: string, description: string, time: float};
   type state = {description: string, events: array event};
   let getInitialState _ => {description: "loading...", events: [||]};
   let name = "App";
-  let unwrapUnsafely =
-    fun
-    | Some v => v
-    | None => raise (Invalid_argument "unwrapUnsafely called on None");
-  let convertToEvent item => {
-    id: unwrapUnsafely (Js.Json.decodeString (Js_dict.unsafeGet item "id")),
-    title: unwrapUnsafely (Js.Json.decodeString (Js_dict.unsafeGet item "name")),
-    description: unwrapUnsafely (Js.Json.decodeString (Js_dict.unsafeGet item "description")),
-    time: unwrapUnsafely (Js.Json.decodeNumber (Js_dict.unsafeGet item "time"))
-  };
   let componentDidMount {setState} => {
     let changeState items => setState (fun _ => {description: "events loaded!", events: items});
-    let processJson c r json =>
-      unwrapUnsafely (Js.Json.decodeArray json) |> (
-        fun items =>
-          items |> Js.Array.map (fun item => item |> Js.Json.decodeObject |> unwrapUnsafely) |>
-          Js.Array.map convertToEvent |> c |> r
-      );
+    let processJson c r json => json |> Decode.main |> c |> r;
     let _ =
-      Js.Promise.(
-        Bs_fetch.fetch "https://crossorigin.me/https://api.meetup.com/Reason-Vienna/events?photo-host=secure&page=20&sig_id=12607916&sig=197d614dc57e10c6ee4c20dbfe9a191caf88a740" |>
-        then_ Bs_fetch.Response.json |>
-        then_ (processJson changeState resolve)
-      );
+      Js.log
+        Js.Promise.(
+          Bs_fetch.fetch "https://crossorigin.me/https://api.meetup.com/Reason-Vienna/events?photo-host=secure&page=20&sig_id=12607916&sig=197d614dc57e10c6ee4c20dbfe9a191caf88a740" |>
+          then_ Bs_fetch.Response.json |>
+          then_ (processJson changeState resolve)
+        );
     None
   };
   let render {state} => {
